@@ -1,16 +1,8 @@
-﻿#include <windows.h> /* for HANDLE type, and console functions */
-#include <fcntl.h>
-#include <io.h>
-
-#include <stdio.h> /* standard input/output */
-#include <stdlib.h> /* included for rand */
-#include <string.h>
+﻿#include "C4.h"
+#include "AI.h"
 
 #define WIDTH 70
 #define HEIGHT 35
-
-#define BOARD_WIDTH 7
-#define BOARD_HEIGHT 6
 
 HANDLE wHnd; /* write (output) handle */
 HANDLE rHnd; /* read (input handle */
@@ -64,6 +56,12 @@ struct GameBoard
     bool column_valid(int pos)
     {
         return !isComplete && buffer[pos][5] == PieceType::Air;
+    }
+
+    bool AIDoMove(void)
+    {
+        CopyBoardToAIBoard(this->buffer);
+
     }
 
     bool drop_piece(int pos)
@@ -148,6 +146,10 @@ struct GameBoard
 
             dirty = true;
         }
+
+        if (!shouldDropRed)
+            AIDoMove();
+
         return true;
     }
 
