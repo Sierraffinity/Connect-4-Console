@@ -1,5 +1,7 @@
 ﻿#include "C4.h"
 #include "AI.h"
+#include <stdlib.h>
+#include <time.h>
 
 #define WIDTH 70
 #define HEIGHT 35
@@ -126,12 +128,13 @@ bool GameBoard::drop_piece(int pos)
         dirty = true;
     }
 
+    turnCount++;
+
     if (!isComplete && !shouldDropRed)
     {
         AIDoMove(*this);
     }
 
-    turnCount++;
     return true;
 }
 
@@ -323,6 +326,14 @@ void update(GameBoard& board)
 
 int main(void)
 {
+    int i, n;
+    time_t t;
+
+    n = 5;
+
+    /* Intializes random number generator */
+    srand((unsigned)time(&t));
+
     _setmode(_fileno(stdout), _O_U16TEXT);
 
     /* Window size coordinates, be sure to start index at zero! */

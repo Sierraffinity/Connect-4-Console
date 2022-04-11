@@ -1,9 +1,11 @@
 #include "C4.h"
+#include <stdlib.h>
 
-#define AI_SEARCH_LEVELS 7
-#define AI_DIFFICULTY 0
+#define AI_SEARCH_LEVELS 6
+#define AI_DIFFICULTY 50
 
 #define u8 uint8_t
+#define u16 uint16_t
 #define bool32 uint32_t
 typedef u8 Connect4Table[NUM_ROWS][NUM_COLUMNS];
 static Connect4Table* sTables[AI_SEARCH_LEVELS + 1] = {};
@@ -13,6 +15,16 @@ static void ConnectFourScreen_PlayPiece(int tableNum, int player, int x);
 static int ConnectFourScreen_FindNextYPosInColumn(int x, int tableNum);
 static void CopyBoardToAIBoard(const struct GameBoard& board);
 static int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int alpha, int beta);
+
+u16 Random(void)
+{
+    u16 random = rand() & 0xFFFF;
+
+    char buffer[256] = {};
+    sprintf(buffer, "Random = %d\n", random);
+    OutputDebugString(buffer);
+    return random;
+}
 
 bool AIDoMove(struct GameBoard& board)
 {
@@ -56,9 +68,9 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
 {
     // searching columns from middle-out
     const static u8 columnOrder[NUM_COLUMNS] = { 3, 2, 4, 1, 5, 0, 6 };
-    int columnScores[NUM_COLUMNS] = { INT_MIN };
+    int columnScores[NUM_COLUMNS] = { INT_MIN, INT_MIN, INT_MIN, INT_MIN, INT_MIN, INT_MIN, INT_MIN };
 
-    int x, i, max, aiFuzzRange;
+    int x, i, max, score;
     Connect4Table* table = sTables[tableNum];
 
     // All spaces filled, tie game
@@ -112,7 +124,7 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
             }
             else
             {
-                int score = 0;
+                score = 0;
                 if ((sTables[tableNum] != NULL) && (sTables[tableNum + 1] != NULL))
                 {
                     memcpy(sTables[tableNum + 1], sTables[tableNum], sizeof(Connect4Table));
@@ -159,19 +171,45 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
 
     if (tableNum == 0)
     {
-        int score = INT_MIN;
+        int shifter = 0;
+        max = INT_MIN;
 
         for (i = 0; i < NUM_COLUMNS; i++)
         {
-            if (columnScores[columnOrder[i]] > score)
+            if (columnScores[i] > max)
             {
-                score = columnScores[columnOrder[i]];
-                alpha = columnOrder[i];
+                max = columnScores[i];
+            }
+        }
+
+        if (AI_DIFFICULTY < 100)
+        {
+            char buffer[256] = {};
+            sprintf(buffer, "Old max: %d\n", max);
+            OutputDebugString(buffer);
+
+            // TODO: Fuzz the max
+            int absMax = (max < 0) ? -max : max;
+            max -= Random() % (absMax * (100 - AI_DIFFICULTY) / 100);
+        }
+
+        if (AI_DIFFICULTY < 70)
+        {
+            shifter = Random() % (7 - (AI_DIFFICULTY / 20));
+        }
+
+        for (i = 0; i < NUM_COLUMNS; i++)
+        {
+            int shifted = (i + shifter) % 7;
+            if (columnScores[columnOrder[shifted]] >= max)
+            {
+                alpha = columnOrder[shifted];
+                break;
             }
         }
 
         char buffer[256] = {};
-        sprintf(buffer, "%d %d %d %d %d %d %d\nOut: %d\n", columnScores[0], columnScores[1], columnScores[2], columnScores[3], columnScores[4], columnScores[5], columnScores[6], alpha);
+        sprintf(buffer, "%d %d %d %d %d %d %d\nMax: %d Shifter: %d Out: %d\n", columnScores[0], columnScores[1], columnScores[2], columnScores[3], columnScores[4], columnScores[5], columnScores[6], max, shifter, alpha);
         OutputDebugString(buffer);
     }
 
