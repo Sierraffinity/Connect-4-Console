@@ -1,9 +1,6 @@
 #include "C4.h"
 
-#define NUM_COLUMNS BOARD_WIDTH
-#define NUM_ROWS BOARD_HEIGHT
-
-#define AI_SEARCH_LEVELS 4
+#define AI_SEARCH_LEVELS 7
 #define AI_DIFFICULTY 0
 
 #define u8 uint8_t
@@ -12,30 +9,57 @@ typedef u8 Connect4Table[NUM_ROWS][NUM_COLUMNS];
 static Connect4Table* sTables[AI_SEARCH_LEVELS + 1] = {};
 
 static bool32 ConnectFourScreen_IsWinningMove(int x, int player, int tableNum);
-
 static void ConnectFourScreen_PlayPiece(int tableNum, int player, int x);
-
 static int ConnectFourScreen_FindNextYPosInColumn(int x, int tableNum);
+static void CopyBoardToAIBoard(const struct GameBoard& board);
+static int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int alpha, int beta);
 
-int CopyBoardToAIBoard(const struct GameBoard& board)
+bool AIDoMove(struct GameBoard& board)
 {
+    size_t tablesSize = sizeof(sTables) / sizeof(*sTables);
+    Connect4Table* tables = (Connect4Table *)calloc(tablesSize, sizeof(Connect4Table));
 
+    for (int i = 0; i < tablesSize; i++)
+    {
+        sTables[i] = &tables[i];
+    }
+
+    CopyBoardToAIBoard(board);
+    int tTurn = 1; // AI turn
+    int tTurnCount = board.turnCount;
+    int x = ConnectFourScreen_ScoreColumn(tTurn, tTurnCount, 0, -((NUM_COLUMNS * NUM_ROWS) / 2), ((NUM_COLUMNS * NUM_ROWS) / 2));
+    free(tables);
+    if (!board.column_valid(x))
+    {
+        char buffer[256] = {};
+        sprintf(buffer, "AI tried to play in column %d\n", x);
+        OutputDebugString(buffer);
+        throw;
+    }
+    return board.drop_piece(x);
+}
+
+void CopyBoardToAIBoard(const struct GameBoard& board)
+{
+    for (int y = 0; y < BOARD_HEIGHT; y++)
+    {
+        for (int x = 0; x < BOARD_WIDTH; x++)
+        {
+            int piece = board.buffer[x][BOARD_HEIGHT - 1 - y];
+            (*sTables[0])[y][x] = (piece > 0) ? piece + 1 : piece;
+        }
+    }
 }
 
 // alpha < beta
-int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int alpha, int beta, int* out)
+int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int alpha, int beta)
 {
     // searching columns from middle-out
     const static u8 columnOrder[NUM_COLUMNS] = { 3, 2, 4, 1, 5, 0, 6 };
+    int columnScores[NUM_COLUMNS] = { INT_MIN };
 
-    int x, y, max, aiFuzzRange;
+    int x, i, max, aiFuzzRange;
     Connect4Table* table = sTables[tableNum];
-
-    // Cannot calculate without a valid output param
-    if (out == NULL)
-    {
-        return 0;
-    }
 
     // All spaces filled, tie game
     if (turnCount == (NUM_COLUMNS * NUM_ROWS))
@@ -48,8 +72,14 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
     {
         if ((*table)[0][x] == 0 && ConnectFourScreen_IsWinningMove(x, player, tableNum))
         {
-            *out = x;
-            return ((NUM_COLUMNS * NUM_ROWS) + 1 - turnCount) / 2;
+            if (tableNum == 0)
+            {
+                return x;
+            }
+            else
+            {
+                return ((NUM_COLUMNS * NUM_ROWS) + 1 - turnCount) / 2;
+            }
         }
     }
 
@@ -65,7 +95,7 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
     }
 
     // Have we looked as deep as we want to go?
-    if (tableNum <= AI_SEARCH_LEVELS)
+    if (tableNum < AI_SEARCH_LEVELS)
     {
         // Fuzz range [-max, max] scaled to difficulty level
         /*if (player == AI)
@@ -76,7 +106,11 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
         // Get best score from all possible moves
         for (x = 0; x < NUM_COLUMNS; x++)
         {
-            if ((*table)[0][columnOrder[x]] == 0)
+            if ((*table)[0][columnOrder[x]] != 0)
+            {
+                columnScores[columnOrder[x]] = INT_MIN;
+            }
+            else
             {
                 int score = 0;
                 if ((sTables[tableNum] != NULL) && (sTables[tableNum + 1] != NULL))
@@ -85,7 +119,7 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
                 }
 
                 ConnectFourScreen_PlayPiece(tableNum + 1, player, columnOrder[x]);
-                score = -ConnectFourScreen_ScoreColumn(!player, turnCount, tableNum + 1, -beta, -alpha, out);
+                score = -ConnectFourScreen_ScoreColumn(!player, turnCount + 1, tableNum + 1, -beta, -alpha);
 
                 // Nerf the AI a bit but assume the player is perfect
                 /*if (player == AI && aiFuzzRange > 0)
@@ -102,10 +136,18 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
                     }
                 }*/
 
+                columnScores[columnOrder[x]] = score;
+
                 if (score >= beta)
                 {
-                    *out = columnOrder[x];
-                    return score;
+                    if (tableNum == 0)
+                    {
+                        return columnOrder[x];
+                    }
+                    else
+                    {
+                        return score;
+                    }
                 }
                 else if (score > alpha)
                 {
@@ -113,6 +155,24 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
                 }
             }
         }
+    }
+
+    if (tableNum == 0)
+    {
+        int score = INT_MIN;
+
+        for (i = 0; i < NUM_COLUMNS; i++)
+        {
+            if (columnScores[columnOrder[i]] > score)
+            {
+                score = columnScores[columnOrder[i]];
+                alpha = columnOrder[i];
+            }
+        }
+
+        char buffer[256] = {};
+        sprintf(buffer, "%d %d %d %d %d %d %d\nOut: %d\n", columnScores[0], columnScores[1], columnScores[2], columnScores[3], columnScores[4], columnScores[5], columnScores[6], alpha);
+        OutputDebugString(buffer);
     }
 
     return alpha;

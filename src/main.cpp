@@ -7,169 +7,144 @@
 HANDLE wHnd; /* write (output) handle */
 HANDLE rHnd; /* read (input handle */
 
-namespace PieceTypeNS
+void GameBoard::resetCursor()
 {
-    enum Enum : int
-    {
-        Invalid = -1,
-        Air = 0,
-        Red = 1,
-        Yellow = 2
-    };
+    cursorPos = BOARD_WIDTH / 2;
 }
 
-typedef PieceTypeNS::Enum PieceType;
-
-struct GameBoard
+GameBoard::GameBoard()
 {
-    void resetCursor()
-    {
-        cursorPos = BOARD_WIDTH / 2;
-    }
+    reset();
+}
 
-    GameBoard()
+PieceType GameBoard::get_type(int x, int y) const
+{
+    if (x < 0 || y < 0 || x >= BOARD_WIDTH || y >= BOARD_HEIGHT)
     {
-        reset();
+        return PieceType::Invalid;
     }
+    return static_cast<PieceType>(buffer[x][y]);
+}
 
-    PieceType get_type(int x, int y)
+int GameBoard::get_column_height(int row)
+{
+    for (int i = 0; i < 5; ++i)
     {
-        if (x < 0 || y < 0 || x > BOARD_WIDTH || y > BOARD_HEIGHT)
+        if (buffer[row][i] == PieceType::Air)
         {
-            return PieceType::Invalid;
+            return i;
         }
-        return static_cast<PieceType>(buffer[x][y]);
     }
+    return 5;
+}
 
-    int get_column_height(int row)
+bool GameBoard::column_valid(int pos)
+{
+    return !isComplete && buffer[pos][5] == PieceType::Air;
+}
+
+bool GameBoard::drop_piece(int pos)
+{
+    if (!column_valid(pos)) return false;
+
+    int newPos = get_column_height(pos);
+    auto targetType = shouldDropRed ? PieceType::Red : PieceType::Yellow;
+    shouldDropRed = !shouldDropRed;
+
+    buffer[pos][newPos] = targetType;
+
+    for (int dir = 0; dir < 8; ++dir)
     {
-        for (int i = 0; i < 5; ++i)
+        int ox = 0;
+        int oy = 0;
+        switch (dir)
         {
-            if (buffer[row][i] == PieceType::Air)
-            {
-                return i;
-            }
-        }
-        return 5;
-    }
-
-    bool column_valid(int pos)
-    {
-        return !isComplete && buffer[pos][5] == PieceType::Air;
-    }
-
-    bool AIDoMove(void)
-    {
-        CopyBoardToAIBoard(this->buffer);
-
-    }
-
-    bool drop_piece(int pos)
-    {
-        if (!column_valid(pos)) return false;
-
-        int newPos = get_column_height(pos);
-        auto targetType = shouldDropRed ? PieceType::Red : PieceType::Yellow;
-        shouldDropRed = !shouldDropRed;
-
-        buffer[pos][newPos] = targetType;
-
-        for (int dir = 0; dir < 8; ++dir)
-        {
-            int ox = 0;
-            int oy = 0;
-            switch (dir)
-            {
-            // Right
-            case 7:
-                ox = 1;
-                oy = -1;
-                break;
-            case 0:
-                ox = 1;
-                oy = 0;
-                break;
-            case 1:
-                ox = 1;
-                oy = 1;
-                break;
-            // Up/down
-            case 2:
-                ox = 0;
-                oy = 1;
-                break;
-            case 6:
-                ox = 0;
-                oy = -1;
-                break;
-            // Left
-            case 5:
-                ox = -1;
-                oy = -1;
-                break;
-            case 4:
-                ox = -1;
-                oy = 0;
-                break;
-            case 3:
-                ox = -1;
-                oy = 1;
-                break;
-            }
-
-            int originX = pos;
-            int originY = newPos;
-
-            while (get_type(originX - ox, originY - oy) == targetType)
-            {
-                originX -= ox;
-                originY -= oy;
-            }
-
-            isComplete = true;
-            for (int i = 1; i < 4; ++i)
-            {
-                int x = originX + ox * i;
-                int y = originY + oy * i;
-                if (get_type(x, y) != targetType)
-                {
-                    isComplete = false;
-                    break;
-                }
-            }
-
-            if (isComplete)
-            {
-                redWins = targetType == PieceType::Red;
-                break;
-            }
-
-            dirty = true;
+        // Right
+        case 7:
+            ox = 1;
+            oy = -1;
+            break;
+        case 0:
+            ox = 1;
+            oy = 0;
+            break;
+        case 1:
+            ox = 1;
+            oy = 1;
+            break;
+        // Up/down
+        case 2:
+            ox = 0;
+            oy = 1;
+            break;
+        case 6:
+            ox = 0;
+            oy = -1;
+            break;
+        // Left
+        case 5:
+            ox = -1;
+            oy = -1;
+            break;
+        case 4:
+            ox = -1;
+            oy = 0;
+            break;
+        case 3:
+            ox = -1;
+            oy = 1;
+            break;
         }
 
-        if (!shouldDropRed)
-            AIDoMove();
+        int originX = pos;
+        int originY = newPos;
 
-        return true;
-    }
+        while (get_type(originX - ox, originY - oy) == targetType)
+        {
+            originX -= ox;
+            originY -= oy;
+        }
 
-    void reset()
-    {
-        memset(buffer, 0, sizeof(buffer));
+        isComplete = true;
+        for (int i = 1; i < 4; ++i)
+        {
+            int x = originX + ox * i;
+            int y = originY + oy * i;
+            if (get_type(x, y) != targetType)
+            {
+                isComplete = false;
+                break;
+            }
+        }
+
+        if (isComplete)
+        {
+            redWins = targetType == PieceType::Red;
+            break;
+        }
+
         dirty = true;
-        resetCursor();
-        shouldDropRed = true;
-        isComplete = false;
-        redWins = false;
     }
 
-    int buffer[7][6];
-    bool dirty;
-    int cursorPos;
-    bool shouldDropRed;
-    bool isComplete;
-    bool redWins;
-};
+    if (!isComplete && !shouldDropRed)
+    {
+        AIDoMove(*this);
+    }
+
+    turnCount++;
+    return true;
+}
+
+void GameBoard::reset()
+{
+    memset(buffer, 0, sizeof(buffer));
+    dirty = true;
+    resetCursor();
+    shouldDropRed = true;
+    isComplete = false;
+    redWins = false;
+    turnCount = 0;
+}
 
 void render(GameBoard& board, CHAR_INFO* consoleBuffer, COORD& characterBufferSize, COORD& characterPosition, SMALL_RECT& consoleWriteArea)
 {
@@ -282,60 +257,65 @@ void render(GameBoard& board, CHAR_INFO* consoleBuffer, COORD& characterBufferSi
 
 void update(GameBoard& board)
 {
-    static bool wasLeft, wasRight, wasEnter, wasR = false;
+    bool isConsoleWindowFocused = (GetConsoleWindow() == GetForegroundWindow());
 
-    bool left = GetAsyncKeyState(VK_LEFT) != 0;
-    bool right = GetAsyncKeyState(VK_RIGHT) != 0;
-    bool enter = GetAsyncKeyState(VK_RETURN) != 0;
-    
-    // R from https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-    // 0x52 == ascii R http://www.asciitable.com/
-    bool rDown = GetAsyncKeyState('R') != 0;
-
-    if (left != wasLeft)
+    if (isConsoleWindowFocused)
     {
-        if (left)
-        {
-            board.cursorPos--;
-            if (board.cursorPos < 0)
-                board.cursorPos = 0;
-            board.dirty = true;
-        }
-    }
-    wasLeft = left;
+        static bool wasLeft, wasRight, wasEnter, wasR = false;
 
-    if (right != wasRight)
-    {
-        if (right)
-        {
-            board.cursorPos++;
-            if (board.cursorPos > BOARD_WIDTH - 1)
-                board.cursorPos = BOARD_WIDTH - 1;
-            board.dirty = true;
-        }
-    }
-    wasRight = right;
+        bool left = GetAsyncKeyState(VK_LEFT) != 0;
+        bool right = GetAsyncKeyState(VK_RIGHT) != 0;
+        bool enter = GetAsyncKeyState(VK_RETURN) != 0;
 
-    if (enter && !wasEnter)
-    {
-        if (enter)
+        // R from https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+        // 0x52 == ascii R http://www.asciitable.com/
+        bool rDown = GetAsyncKeyState('R') != 0;
+
+        if (left != wasLeft)
         {
-            if (board.drop_piece(board.cursorPos))
+            if (left)
             {
-                board.resetCursor();
+                board.cursorPos--;
+                if (board.cursorPos < 0)
+                    board.cursorPos = 0;
+                board.dirty = true;
             }
         }
-    }
-    wasEnter = enter;
+        wasLeft = left;
 
-    if (rDown != wasR)
-    {
-        if (rDown && board.isComplete)
+        if (right != wasRight)
         {
-            board.reset();
+            if (right)
+            {
+                board.cursorPos++;
+                if (board.cursorPos > BOARD_WIDTH - 1)
+                    board.cursorPos = BOARD_WIDTH - 1;
+                board.dirty = true;
+            }
         }
+        wasRight = right;
+
+        if (enter && !wasEnter)
+        {
+            if (enter)
+            {
+                if (board.drop_piece(board.cursorPos))
+                {
+                    board.resetCursor();
+                }
+            }
+        }
+        wasEnter = enter;
+
+        if (rDown != wasR)
+        {
+            if (rDown)
+            {
+                board.reset();
+            }
+        }
+        wasLeft = left;
     }
-    wasLeft = left;
 
     // TODO: Game loop
     Sleep(4);
