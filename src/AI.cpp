@@ -190,12 +190,12 @@ int ConnectFourScreen_ScoreColumn(int player, int turnCount, int tableNum, int a
 
             // TODO: Fuzz the max
             int absMax = (max < 0) ? -max : max;
-            max -= Random() % (absMax * (100 - AI_DIFFICULTY) / 100);
+            max -= Random() % (absMax * (100 - AI_DIFFICULTY) / 150);
         }
 
         if (AI_DIFFICULTY < 70)
         {
-            shifter = Random() % (7 - (AI_DIFFICULTY / 20));
+            shifter = Random() % (7 - (AI_DIFFICULTY / 10));
         }
 
         for (i = 0; i < NUM_COLUMNS; i++)
